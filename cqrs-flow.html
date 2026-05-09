@@ -6,647 +6,201 @@
 <title>CQRS Flow — LibraryManagement</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;600;700;800&display=swap');
-
   :root {
-    --bg: #0a0a0f;
-    --surface: #111118;
-    --border: #1e1e2e;
-    --cmd: #f97316;
-    --cmd-dim: rgba(249,115,22,0.12);
-    --cmd-glow: rgba(249,115,22,0.3);
-    --qry: #06b6d4;
-    --qry-dim: rgba(6,182,212,0.12);
-    --qry-glow: rgba(6,182,212,0.3);
-    --domain: #a855f7;
-    --domain-dim: rgba(168,85,247,0.12);
-    --infra: #22c55e;
-    --infra-dim: rgba(34,197,94,0.12);
-    --shared: #eab308;
-    --shared-dim: rgba(234,179,8,0.12);
-    --api: #e2e8f0;
-    --muted: #475569;
-    --text: #cbd5e1;
-    --text-bright: #f1f5f9;
+    --bg:#0a0a0f;--surface:#111118;--border:#1e1e2e;
+    --cmd:#f97316;--cmd-dim:rgba(249,115,22,0.12);--cmd-glow:rgba(249,115,22,0.3);
+    --qry:#06b6d4;--qry-dim:rgba(6,182,212,0.12);--qry-glow:rgba(6,182,212,0.3);
+    --domain:#a855f7;--domain-dim:rgba(168,85,247,0.12);
+    --infra:#22c55e;--infra-dim:rgba(34,197,94,0.12);
+    --shared:#eab308;--shared-dim:rgba(234,179,8,0.12);
+    --muted:#475569;--text:#cbd5e1;--text-bright:#f1f5f9;
   }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;min-height:100vh;overflow-x:hidden;}
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  /* LANG TOGGLE */
+  .lang-bar{display:flex;justify-content:flex-end;padding:0.8rem 1.5rem 0;}
+  .lang-toggle{display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;background:var(--surface);}
+  .lang-btn{padding:0.4rem 1.1rem;font-family:'JetBrains Mono',monospace;font-size:0.75rem;font-weight:700;letter-spacing:0.1em;cursor:pointer;border:none;background:transparent;color:var(--muted);transition:all 0.2s;}
+  .lang-btn:first-child{border-right:1px solid var(--border);}
+  .lang-btn.active{background:var(--qry-dim);color:var(--qry);}
+  .lang-btn:hover:not(.active){color:var(--text-bright);}
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'JetBrains Mono', monospace;
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
+  /* LANG VISIBILITY */
+  .tr,.en{display:none;}
+  body.lang-tr .tr{display:contents;}
+  body.lang-en .en{display:contents;}
+  span.tr,span.en,div.tr,div.en{display:none;}
+  body.lang-tr span.tr,body.lang-tr div.tr{display:inline;}
+  body.lang-en span.en,body.lang-en div.en{display:inline;}
+  body.lang-tr p.tr,body.lang-en p.en{display:block;}
+  body.lang-tr .bf-action .tr,body.lang-en .bf-action .en{display:inline;}
 
-  /* ── HEADER ── */
-  header {
-    padding: 3rem 2rem 2rem;
-    text-align: center;
-    position: relative;
-  }
-  header::after {
-    content: '';
-    position: absolute;
-    bottom: 0; left: 50%; transform: translateX(-50%);
-    width: 60%; height: 1px;
-    background: linear-gradient(90deg, transparent, var(--border), transparent);
-  }
-  .logo {
-    font-family: 'Syne', sans-serif;
-    font-size: clamp(1.6rem, 4vw, 2.8rem);
-    font-weight: 800;
-    letter-spacing: -0.02em;
-    color: var(--text-bright);
-    margin-bottom: 0.5rem;
-  }
-  .logo span.cmd { color: var(--cmd); }
-  .logo span.qry { color: var(--qry); }
-  .subtitle {
-    font-size: 0.78rem;
-    color: var(--muted);
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-  }
+  /* HEADER */
+  header{padding:2rem 2rem 2rem;text-align:center;position:relative;}
+  header::after{content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:60%;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);}
+  .logo{font-family:'Syne',sans-serif;font-size:clamp(1.6rem,4vw,2.8rem);font-weight:800;letter-spacing:-0.02em;color:var(--text-bright);margin-bottom:0.5rem;}
+  .logo span.cmd{color:var(--cmd);}.logo span.qry{color:var(--qry);}
+  .subtitle{font-size:0.78rem;color:var(--muted);letter-spacing:0.15em;text-transform:uppercase;}
 
-  /* ── TABS ── */
-  .tabs {
-    display: flex;
-    justify-content: center;
-    gap: 0.5rem;
-    padding: 2rem 1rem 0;
-    flex-wrap: wrap;
-  }
-  .tab {
-    padding: 0.6rem 1.4rem;
-    border-radius: 4px;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--muted);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.75rem;
-    cursor: pointer;
-    transition: all 0.2s;
-    letter-spacing: 0.05em;
-  }
-  .tab:hover { color: var(--text-bright); border-color: #334155; }
-  .tab.active-cmd { border-color: var(--cmd); color: var(--cmd); background: var(--cmd-dim); }
-  .tab.active-qry { border-color: var(--qry); color: var(--qry); background: var(--qry-dim); }
-  .tab.active-arch { border-color: var(--domain); color: var(--domain); background: var(--domain-dim); }
-  .tab.active-comp { border-color: var(--shared); color: var(--shared); background: var(--shared-dim); }
+  /* TABS */
+  .tabs{display:flex;justify-content:center;gap:0.5rem;padding:2rem 1rem 0;flex-wrap:wrap;}
+  .tab{padding:0.6rem 1.4rem;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:0.75rem;cursor:pointer;transition:all 0.2s;letter-spacing:0.05em;}
+  .tab:hover{color:var(--text-bright);border-color:#334155;}
+  .tab.active-cmd{border-color:var(--cmd);color:var(--cmd);background:var(--cmd-dim);}
+  .tab.active-qry{border-color:var(--qry);color:var(--qry);background:var(--qry-dim);}
+  .tab.active-arch{border-color:var(--domain);color:var(--domain);background:var(--domain-dim);}
+  .tab.active-comp{border-color:var(--shared);color:var(--shared);background:var(--shared-dim);}
 
-  /* ── PANELS ── */
-  .panel { display: none; padding: 2rem; max-width: 1100px; margin: 0 auto; }
-  .panel.active { display: block; animation: fadeIn 0.3s ease; }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  /* PANELS */
+  .panel{display:none;padding:2rem;max-width:1100px;margin:0 auto;}
+  .panel.active{display:block;animation:fadeIn 0.3s ease;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
 
-  /* ── FLOW DIAGRAM ── */
-  .flow {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    position: relative;
-  }
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
+  @media(max-width:680px){.split{grid-template-columns:1fr;}}
 
-  .flow-row {
-    display: flex;
-    align-items: stretch;
-    gap: 0;
-    position: relative;
-  }
+  .flow-card{border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+  .flow-card-header{padding:0.8rem 1.2rem;font-size:0.7rem;letter-spacing:0.15em;text-transform:uppercase;font-weight:700;display:flex;align-items:center;gap:0.6rem;}
+  .flow-card-header.cmd-h{background:var(--cmd-dim);color:var(--cmd);border-bottom:1px solid rgba(249,115,22,0.2);}
+  .flow-card-header.qry-h{background:var(--qry-dim);color:var(--qry);border-bottom:1px solid rgba(6,182,212,0.2);}
+  .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+  .dot-cmd{background:var(--cmd);}.dot-qry{background:var(--qry);}
 
-  /* layer label on left */
-  .layer-label {
-    width: 110px;
-    min-width: 110px;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    padding-right: 1rem;
-    font-size: 0.65rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    font-weight: 600;
-    opacity: 0.5;
-  }
+  .flow-steps{padding:1rem;display:flex;flex-direction:column;gap:0;}
+  .step{display:flex;gap:0.8rem;align-items:flex-start;padding:0.7rem 0.4rem;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s;border-radius:4px;}
+  .step:last-child{border-bottom:none;}
+  .step:hover{background:rgba(255,255,255,0.02);}
+  .step-num{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;flex-shrink:0;margin-top:1px;}
+  .step-num.cmd-n{background:var(--cmd-dim);color:var(--cmd);border:1px solid var(--cmd);}
+  .step-num.qry-n{background:var(--qry-dim);color:var(--qry);border:1px solid var(--qry);}
+  .step-body{flex:1;}
+  .step-layer{font-size:0.58rem;letter-spacing:0.12em;text-transform:uppercase;opacity:0.4;margin-bottom:0.2rem;}
+  .step-title{font-size:0.78rem;font-weight:600;color:var(--text-bright);margin-bottom:0.2rem;}
+  .step-detail{font-size:0.68rem;color:var(--muted);line-height:1.5;}
+  .step-code{font-size:0.65rem;background:rgba(255,255,255,0.04);border-left:2px solid;padding:0.3rem 0.6rem;margin-top:0.4rem;border-radius:0 3px 3px 0;color:var(--text);line-height:1.6;display:none;white-space:pre;}
+  .step-code.cmd-code{border-color:var(--cmd);}.step-code.qry-code{border-color:var(--qry);}
+  .step.expanded .step-code{display:block;}
+  .expand-hint{font-size:0.55rem;opacity:0.3;margin-top:0.2rem;letter-spacing:0.08em;}
 
-  .flow-content {
-    flex: 1;
-    padding: 0.3rem 0;
-  }
+  /* BIG FLOW */
+  .big-flow{position:relative;padding:1rem 0;}
+  .bf-row{display:flex;align-items:center;gap:0;margin-bottom:0;}
+  .bf-layer{width:90px;min-width:90px;font-size:0.58rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);text-align:right;padding-right:0.8rem;line-height:1.4;}
+  .bf-node{padding:0.65rem 1rem;border-radius:5px;border:1px solid;font-size:0.72rem;min-width:150px;transition:all 0.2s;}
+  .bf-node:hover{transform:translateX(3px);}
+  .bf-name{font-weight:700;color:var(--text-bright);font-size:0.78rem;}
+  .bf-action{font-size:0.63rem;color:var(--muted);margin-top:0.15rem;}
+  .bf-connector{display:flex;align-items:center;padding-left:90px;height:32px;position:relative;}
+  .bf-connector::before{content:'';position:absolute;left:135px;top:0;bottom:0;width:2px;opacity:0.35;}
+  .bf-connector::after{content:'▼';position:absolute;left:127px;bottom:2px;font-size:9px;opacity:0.7;}
+  .bf-connector-label{font-size:0.58rem;margin-left:1.8rem;opacity:0.4;letter-spacing:0.06em;}
+  .c-cmd::before{background:var(--cmd);}.c-cmd::after{color:var(--cmd);}
+  .c-qry::before{background:var(--qry);}.c-qry::after{color:var(--qry);}
+  .c-dom::before{background:var(--domain);}.c-dom::after{color:var(--domain);}
+  .c-inf::before{background:var(--infra);}.c-inf::after{color:var(--infra);}
+  .bf-node.n-http{border-color:#475569;background:rgba(71,85,105,0.2);}
+  .bf-node.n-ctrl{border-color:#64748b;background:rgba(100,116,139,0.15);}
+  .bf-node.n-disp{border-color:var(--shared);background:var(--shared-dim);}
+  .bf-node.n-cmd{border-color:var(--cmd);background:var(--cmd-dim);}
+  .bf-node.n-qry{border-color:var(--qry);background:var(--qry-dim);}
+  .bf-node.n-dom{border-color:var(--domain);background:var(--domain-dim);}
+  .bf-node.n-repo{border-color:var(--infra);background:var(--infra-dim);}
+  .bf-node.n-db{border-color:var(--infra);background:rgba(34,197,94,0.06);}
 
-  /* ── NODE ── */
-  .node {
-    display: inline-flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    padding: 0.9rem 1.2rem;
-    border-radius: 6px;
-    border: 1px solid;
-    position: relative;
-    cursor: pointer;
-    transition: all 0.2s;
-    min-width: 160px;
-  }
-  .node:hover { transform: translateY(-2px); }
-  .node-name {
-    font-family: 'Syne', sans-serif;
-    font-size: 0.85rem;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-  }
-  .node-type {
-    font-size: 0.6rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    opacity: 0.6;
-  }
-  .node-file {
-    font-size: 0.58rem;
-    opacity: 0.4;
-    margin-top: 0.1rem;
-  }
+  /* ARCH */
+  .arch-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:2rem;}
+  .arch-card{border-radius:8px;padding:1.2rem;border:1px solid;position:relative;overflow:hidden;}
+  .arch-card::before{content:'';position:absolute;top:0;right:0;width:60px;height:60px;border-radius:0 8px 0 60px;opacity:0.08;}
+  .arch-card.sk{border-color:rgba(234,179,8,0.3);background:var(--shared-dim);}   .arch-card.sk::before{background:var(--shared);}
+  .arch-card.dom{border-color:rgba(168,85,247,0.3);background:var(--domain-dim);}  .arch-card.dom::before{background:var(--domain);}
+  .arch-card.app{border-color:rgba(249,115,22,0.2);background:rgba(249,115,22,0.06);}.arch-card.app::before{background:var(--cmd);}
+  .arch-card.inf{border-color:rgba(34,197,94,0.3);background:var(--infra-dim);}    .arch-card.inf::before{background:var(--infra);}
+  .arch-card.web{border-color:rgba(148,163,184,0.2);background:rgba(148,163,184,0.05);}.arch-card.web::before{background:#94a3b8;}
+  .arch-layer-tag{font-size:0.6rem;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:0.6rem;font-weight:700;}
+  .sk .arch-layer-tag{color:var(--shared);}.dom .arch-layer-tag{color:var(--domain);}
+  .app .arch-layer-tag{color:var(--cmd);}.inf .arch-layer-tag{color:var(--infra);}.web .arch-layer-tag{color:#94a3b8;}
+  .arch-title{font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;color:var(--text-bright);margin-bottom:0.5rem;}
+  .arch-desc{font-size:0.68rem;color:var(--muted);line-height:1.6;margin-bottom:0.7rem;}
+  .arch-files{display:flex;flex-direction:column;gap:0.2rem;}
+  .arch-file{font-size:0.62rem;padding:0.2rem 0.5rem;border-radius:3px;background:rgba(255,255,255,0.04);color:var(--muted);}
 
-  .node.cmd { border-color: var(--cmd); background: var(--cmd-dim); color: var(--cmd); }
-  .node.cmd:hover { box-shadow: 0 0 20px var(--cmd-glow); }
-  .node.qry { border-color: var(--qry); background: var(--qry-dim); color: var(--qry); }
-  .node.qry:hover { box-shadow: 0 0 20px var(--qry-glow); }
-  .node.domain { border-color: var(--domain); background: var(--domain-dim); color: var(--domain); }
-  .node.infra { border-color: var(--infra); background: var(--infra-dim); color: var(--infra); }
-  .node.shared { border-color: var(--shared); background: var(--shared-dim); color: var(--shared); }
-  .node.neutral { border-color: #334155; background: var(--surface); color: var(--text); }
+  .dep-flow{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:0;margin:1.5rem 0;padding:1.2rem;border:1px solid var(--border);border-radius:8px;background:var(--surface);}
+  .dep-box{padding:0.5rem 1rem;border-radius:4px;font-size:0.7rem;font-weight:700;font-family:'Syne',sans-serif;letter-spacing:0.05em;white-space:nowrap;}
+  .dep-arrow-h{color:var(--muted);font-size:1rem;padding:0 0.3rem;}
+  .dep-note{font-size:0.6rem;color:var(--muted);text-align:center;margin-top:0.5rem;width:100%;letter-spacing:0.05em;}
 
-  /* ── ARROWS ── */
-  .arrow-down {
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    padding-left: 110px;
-    height: 40px;
-    position: relative;
-  }
-  .arrow-down::before {
-    content: '';
-    position: absolute;
-    left: 190px;
-    top: 0; bottom: 0;
-    width: 2px;
-  }
-  .arrow-down::after {
-    content: '▼';
-    position: absolute;
-    left: 182px;
-    bottom: 2px;
-    font-size: 10px;
-  }
-  .arrow-down.cmd-arrow::before { background: var(--cmd); opacity: 0.4; }
-  .arrow-down.cmd-arrow::after { color: var(--cmd); opacity: 0.7; }
-  .arrow-down.qry-arrow::before { background: var(--qry); opacity: 0.4; }
-  .arrow-down.qry-arrow::after { color: var(--qry); opacity: 0.7; }
+  /* COMPARE */
+  .compare-table{width:100%;border-collapse:collapse;font-size:0.72rem;}
+  .compare-table th{padding:0.8rem 1rem;text-align:left;font-family:'Syne',sans-serif;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;border-bottom:1px solid var(--border);}
+  .compare-table th:nth-child(2){color:#ef4444;}.compare-table th:nth-child(3){color:var(--infra);}
+  .compare-table td{padding:0.75rem 1rem;border-bottom:1px solid var(--border);vertical-align:top;line-height:1.5;color:var(--muted);}
+  .compare-table td:first-child{color:var(--text);font-weight:600;white-space:nowrap;}
+  .compare-table td.bad{color:#ef4444;opacity:0.8;}.compare-table td.good{color:var(--infra);}
+  .compare-table tr:hover td{background:rgba(255,255,255,0.02);}
 
-  .arrow-label {
-    font-size: 0.6rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    opacity: 0.5;
-    margin-left: 1rem;
-  }
-
-  /* ── SIDE BY SIDE ── */
-  .split {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-  }
-  @media (max-width: 680px) { .split { grid-template-columns: 1fr; } }
-
-  .flow-card {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  .flow-card-header {
-    padding: 0.8rem 1.2rem;
-    font-size: 0.7rem;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-  }
-  .flow-card-header.cmd-h { background: var(--cmd-dim); color: var(--cmd); border-bottom: 1px solid rgba(249,115,22,0.2); }
-  .flow-card-header.qry-h { background: var(--qry-dim); color: var(--qry); border-bottom: 1px solid rgba(6,182,212,0.2); }
-  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-  .dot-cmd { background: var(--cmd); }
-  .dot-qry { background: var(--qry); }
-
-  .flow-steps {
-    padding: 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-  }
-
-  .step {
-    display: flex;
-    gap: 0.8rem;
-    align-items: flex-start;
-    padding: 0.7rem 0;
-    border-bottom: 1px solid var(--border);
-    cursor: pointer;
-    transition: background 0.15s;
-    border-radius: 4px;
-    padding-left: 0.4rem;
-    position: relative;
-  }
-  .step:last-child { border-bottom: none; }
-  .step:hover { background: rgba(255,255,255,0.02); }
-
-  .step-num {
-    width: 22px; height: 22px;
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 0.65rem;
-    font-weight: 700;
-    flex-shrink: 0;
-    margin-top: 1px;
-  }
-  .step-num.cmd-n { background: var(--cmd-dim); color: var(--cmd); border: 1px solid var(--cmd); }
-  .step-num.qry-n { background: var(--qry-dim); color: var(--qry); border: 1px solid var(--qry); }
-
-  .step-body { flex: 1; }
-  .step-layer {
-    font-size: 0.58rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    opacity: 0.4;
-    margin-bottom: 0.2rem;
-  }
-  .step-title {
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: var(--text-bright);
-    margin-bottom: 0.2rem;
-  }
-  .step-detail {
-    font-size: 0.68rem;
-    color: var(--muted);
-    line-height: 1.5;
-  }
-  .step-code {
-    font-size: 0.65rem;
-    background: rgba(255,255,255,0.04);
-    border-left: 2px solid;
-    padding: 0.3rem 0.6rem;
-    margin-top: 0.4rem;
-    border-radius: 0 3px 3px 0;
-    color: var(--text);
-    line-height: 1.6;
-    display: none;
-  }
-  .step-code.cmd-code { border-color: var(--cmd); }
-  .step-code.qry-code { border-color: var(--qry); }
-  .step.expanded .step-code { display: block; }
-
-  .expand-hint {
-    font-size: 0.55rem;
-    opacity: 0.3;
-    margin-top: 0.2rem;
-    letter-spacing: 0.08em;
-  }
-
-  /* ── ARCH PANEL ── */
-  .arch-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1rem;
-    margin-bottom: 2rem;
-  }
-
-  .arch-card {
-    border-radius: 8px;
-    padding: 1.2rem;
-    border: 1px solid;
-    position: relative;
-    overflow: hidden;
-  }
-  .arch-card::before {
-    content: '';
-    position: absolute;
-    top: 0; right: 0;
-    width: 60px; height: 60px;
-    border-radius: 0 8px 0 60px;
-    opacity: 0.08;
-  }
-  .arch-card.sk { border-color: rgba(234,179,8,0.3); background: var(--shared-dim); }
-  .arch-card.sk::before { background: var(--shared); }
-  .arch-card.dom { border-color: rgba(168,85,247,0.3); background: var(--domain-dim); }
-  .arch-card.dom::before { background: var(--domain); }
-  .arch-card.app { border-color: rgba(249,115,22,0.2); background: rgba(249,115,22,0.06); }
-  .arch-card.app::before { background: var(--cmd); }
-  .arch-card.inf { border-color: rgba(34,197,94,0.3); background: var(--infra-dim); }
-  .arch-card.inf::before { background: var(--infra); }
-  .arch-card.web { border-color: rgba(148,163,184,0.2); background: rgba(148,163,184,0.05); }
-  .arch-card.web::before { background: #94a3b8; }
-
-  .arch-layer-tag {
-    font-size: 0.6rem;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    margin-bottom: 0.6rem;
-    font-weight: 700;
-  }
-  .sk .arch-layer-tag { color: var(--shared); }
-  .dom .arch-layer-tag { color: var(--domain); }
-  .app .arch-layer-tag { color: var(--cmd); }
-  .inf .arch-layer-tag { color: var(--infra); }
-  .web .arch-layer-tag { color: #94a3b8; }
-
-  .arch-title {
-    font-family: 'Syne', sans-serif;
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--text-bright);
-    margin-bottom: 0.5rem;
-  }
-  .arch-desc {
-    font-size: 0.68rem;
-    color: var(--muted);
-    line-height: 1.6;
-    margin-bottom: 0.7rem;
-  }
-  .arch-files {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-  }
-  .arch-file {
-    font-size: 0.62rem;
-    padding: 0.2rem 0.5rem;
-    border-radius: 3px;
-    background: rgba(255,255,255,0.04);
-    color: var(--muted);
-    letter-spacing: 0.03em;
-  }
-
-  /* dep arrow */
-  .dep-flow {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0;
-    flex-wrap: wrap;
-    margin: 1.5rem 0;
-    padding: 1.2rem;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface);
-  }
-  .dep-box {
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    font-weight: 700;
-    font-family: 'Syne', sans-serif;
-    letter-spacing: 0.05em;
-    white-space: nowrap;
-  }
-  .dep-arrow-h {
-    color: var(--muted);
-    font-size: 1rem;
-    padding: 0 0.3rem;
-  }
-  .dep-note { font-size: 0.6rem; color: var(--muted); text-align: center; margin-top: 0.5rem; width: 100%; letter-spacing: 0.05em; }
-
-  /* ── COMPARE PANEL ── */
-  .compare-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.72rem;
-  }
-  .compare-table th {
-    padding: 0.8rem 1rem;
-    text-align: left;
-    font-family: 'Syne', sans-serif;
-    font-size: 0.7rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    border-bottom: 1px solid var(--border);
-  }
-  .compare-table th:nth-child(2) { color: #ef4444; }
-  .compare-table th:nth-child(3) { color: var(--infra); }
-  .compare-table td {
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--border);
-    vertical-align: top;
-    line-height: 1.5;
-    color: var(--muted);
-  }
-  .compare-table td:first-child { color: var(--text); font-weight: 600; white-space: nowrap; }
-  .compare-table td.bad { color: #ef4444; opacity: 0.8; }
-  .compare-table td.good { color: var(--infra); }
-  .compare-table tr:hover td { background: rgba(255,255,255,0.02); }
-
-  /* ── SCENARIO BIG FLOW ── */
-  .big-flow {
-    position: relative;
-    padding: 1rem 0;
-  }
-  .bf-row {
-    display: flex;
-    align-items: center;
-    gap: 0;
-    margin-bottom: 0;
-    position: relative;
-  }
-  .bf-layer {
-    width: 90px;
-    min-width: 90px;
-    font-size: 0.58rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--muted);
-    text-align: right;
-    padding-right: 0.8rem;
-    line-height: 1.4;
-  }
-  .bf-node {
-    padding: 0.65rem 1rem;
-    border-radius: 5px;
-    border: 1px solid;
-    font-size: 0.72rem;
-    position: relative;
-    min-width: 150px;
-    transition: all 0.2s;
-  }
-  .bf-node:hover { transform: translateX(3px); }
-  .bf-name { font-weight: 700; color: var(--text-bright); font-size: 0.78rem; }
-  .bf-action { font-size: 0.63rem; color: var(--muted); margin-top: 0.15rem; }
-
-  .bf-connector {
-    display: flex;
-    align-items: center;
-    padding-left: 90px;
-    height: 32px;
-    position: relative;
-  }
-  .bf-connector::before {
-    content: '';
-    position: absolute;
-    left: 135px; top: 0; bottom: 0; width: 2px;
-    opacity: 0.35;
-  }
-  .bf-connector::after {
-    content: '▼';
-    position: absolute;
-    left: 127px; bottom: 2px;
-    font-size: 9px; opacity: 0.7;
-  }
-  .bf-connector-label {
-    font-size: 0.58rem;
-    margin-left: 1.8rem;
-    opacity: 0.4;
-    letter-spacing: 0.06em;
-  }
-  .c-cmd::before { background: var(--cmd); }
-  .c-cmd::after { color: var(--cmd); }
-  .c-qry::before { background: var(--qry); }
-  .c-qry::after { color: var(--qry); }
-  .c-dom::before { background: var(--domain); }
-  .c-dom::after { color: var(--domain); }
-  .c-inf::before { background: var(--infra); }
-  .c-inf::after { color: var(--infra); }
-
-  .bf-node.n-http { border-color: #475569; background: rgba(71,85,105,0.2); }
-  .bf-node.n-ctrl { border-color: #64748b; background: rgba(100,116,139,0.15); }
-  .bf-node.n-disp { border-color: var(--shared); background: var(--shared-dim); }
-  .bf-node.n-cmd { border-color: var(--cmd); background: var(--cmd-dim); }
-  .bf-node.n-qry { border-color: var(--qry); background: var(--qry-dim); }
-  .bf-node.n-dom { border-color: var(--domain); background: var(--domain-dim); }
-  .bf-node.n-repo { border-color: var(--infra); background: var(--infra-dim); }
-  .bf-node.n-db { border-color: var(--infra); background: rgba(34,197,94,0.06); }
-
-  /* section title */
-  .section-title {
-    font-family: 'Syne', sans-serif;
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--text-bright);
-    margin: 2rem 0 1rem;
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-  }
-  .section-title::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: var(--border);
-  }
-
-  .badge {
-    font-size: 0.6rem;
-    padding: 0.2rem 0.6rem;
-    border-radius: 20px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-  .badge-cmd { background: var(--cmd-dim); color: var(--cmd); border: 1px solid rgba(249,115,22,0.3); }
-  .badge-qry { background: var(--qry-dim); color: var(--qry); border: 1px solid rgba(6,182,212,0.3); }
-
-  /* tooltip popup */
-  .tooltip-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.7);
-    z-index: 100;
-    align-items: center;
-    justify-content: center;
-  }
-  .tooltip-overlay.show { display: flex; }
-  .tooltip-box {
-    background: #13131f;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1.5rem;
-    max-width: 480px;
-    width: 90%;
-    position: relative;
-  }
-  .tooltip-close {
-    position: absolute;
-    top: 0.8rem; right: 1rem;
-    background: none; border: none;
-    color: var(--muted); font-size: 1.2rem;
-    cursor: pointer;
-  }
-  .tooltip-tag {
-    font-size: 0.6rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    margin-bottom: 0.5rem;
-    font-weight: 700;
-  }
-  .tooltip-title {
-    font-family: 'Syne', sans-serif;
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--text-bright);
-    margin-bottom: 0.7rem;
-  }
-  .tooltip-body { font-size: 0.72rem; color: var(--muted); line-height: 1.7; }
-  .tooltip-code {
-    margin-top: 0.8rem;
-    background: rgba(255,255,255,0.04);
-    border-radius: 4px;
-    padding: 0.7rem 0.9rem;
-    font-size: 0.65rem;
-    color: var(--text);
-    line-height: 1.7;
-    border-left: 2px solid;
-    white-space: pre;
-  }
+  .section-title{font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;color:var(--text-bright);margin:2rem 0 1rem;display:flex;align-items:center;gap:0.6rem;}
+  .section-title::after{content:'';flex:1;height:1px;background:var(--border);}
+  .badge{font-size:0.6rem;padding:0.2rem 0.6rem;border-radius:20px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;}
+  .badge-cmd{background:var(--cmd-dim);color:var(--cmd);border:1px solid rgba(249,115,22,0.3);}
+  .badge-qry{background:var(--qry-dim);color:var(--qry);border:1px solid rgba(6,182,212,0.3);}
 </style>
 </head>
-<body>
+<body class="lang-tr">
+
+<!-- ── DİL BUTONU ── -->
+<div class="lang-bar">
+  <div class="lang-toggle">
+    <button class="lang-btn active" id="btn-tr" onclick="setLang('tr')">TR</button>
+    <button class="lang-btn"        id="btn-en" onclick="setLang('en')">EN</button>
+  </div>
+</div>
 
 <header>
   <div class="logo">Library<span class="cmd">Command</span> / <span class="qry">Query</span></div>
-  <div class="subtitle">CQRS + Clean Architecture — Detaylı Akış Diyagramı</div>
+  <div class="subtitle">
+    <span class="tr">CQRS + Clean Architecture — Detaylı Akış Diyagramı</span>
+    <span class="en">CQRS + Clean Architecture — Detailed Flow Diagram</span>
+  </div>
 </header>
 
 <div class="tabs">
-  <button class="tab active-cmd" onclick="showPanel('cmd')">① Yazma Akışı (Command)</button>
-  <button class="tab" onclick="showPanel('qry')">② Okuma Akışı (Query)</button>
-  <button class="tab" onclick="showPanel('arch')">③ Katman Mimarisi</button>
+  <button class="tab active-cmd" onclick="showPanel('cmd')">
+    <span class="tr">① Yazma Akışı (Command)</span><span class="en">① Write Flow (Command)</span>
+  </button>
+  <button class="tab" onclick="showPanel('qry')">
+    <span class="tr">② Okuma Akışı (Query)</span><span class="en">② Read Flow (Query)</span>
+  </button>
+  <button class="tab" onclick="showPanel('arch')">
+    <span class="tr">③ Katman Mimarisi</span><span class="en">③ Layer Architecture</span>
+  </button>
   <button class="tab" onclick="showPanel('comp')">④ CRUD vs CQRS</button>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════ -->
-<!-- PANEL 1: COMMAND FLOW -->
-<!-- ══════════════════════════════════════════════════════════ -->
+<!-- ══════════════ PANEL 1: COMMAND ══════════════ -->
 <div id="panel-cmd" class="panel active">
-
-  <div class="section-title"><span class="badge badge-cmd">● Command</span> Kitap Ödünç Verme — Yazma Akışı</div>
-  <p style="font-size:0.72rem;color:var(--muted);margin-bottom:1.5rem;line-height:1.7">
-    POST /api/loans isteği atıldığında aşağıdaki adımlar sırayla işlenir.
-    Her adıma tıkla → kod detayını gör.
-  </p>
+  <div class="section-title">
+    <span class="badge badge-cmd">● Command</span>
+    <span class="tr">Kitap Ödünç Verme — Yazma Akışı</span>
+    <span class="en">Book Loan — Write Flow</span>
+  </div>
+  <p class="tr" style="font-size:0.72rem;color:var(--muted);margin-bottom:1.5rem;line-height:1.7">POST /api/loans isteği atıldığında aşağıdaki adımlar sırayla işlenir. Her adıma tıkla → kod detayını gör.</p>
+  <p class="en" style="font-size:0.72rem;color:var(--muted);margin-bottom:1.5rem;line-height:1.7">When a POST /api/loans request is made, the steps below are processed in order. Click each step → view code details.</p>
 
   <div class="split">
     <div class="flow-card">
-      <div class="flow-card-header cmd-h"><span class="dot dot-cmd"></span>COMMAND — Yazma Zinciri</div>
+      <div class="flow-card-header cmd-h">
+        <span class="dot dot-cmd"></span>
+        <span class="tr">COMMAND — Yazma Zinciri</span><span class="en">COMMAND — Write Chain</span>
+      </div>
       <div class="flow-steps">
 
         <div class="step" onclick="toggleStep(this)">
           <div class="step-num cmd-n">1</div>
           <div class="step-body">
-            <div class="step-layer">Web.Api Katmanı</div>
-            <div class="step-title">HTTP İsteği Gelir</div>
-            <div class="step-detail">POST /api/loans — JSON body ile BookId, MemberId, DueDate gönderilir</div>
+            <div class="step-layer">Web.Api</div>
+            <div class="step-title"><span class="tr">HTTP İsteği Gelir</span><span class="en">HTTP Request Arrives</span></div>
+            <div class="step-detail"><span class="tr">POST /api/loans — JSON body ile BookId, MemberId, DueDate gönderilir</span><span class="en">POST /api/loans — BookId, MemberId, DueDate sent in JSON body</span></div>
             <div class="step-code cmd-code">POST /api/loans
 Content-Type: application/json
 
@@ -655,7 +209,7 @@ Content-Type: application/json
   "memberId": 2,
   "dueDate": "2026-06-01"
 }</div>
-            <div class="expand-hint">▸ koda bak</div>
+            <div class="expand-hint"><span class="tr">▸ koda bak</span><span class="en">▸ view code</span></div>
           </div>
         </div>
 
@@ -663,17 +217,17 @@ Content-Type: application/json
           <div class="step-num cmd-n">2</div>
           <div class="step-body">
             <div class="step-layer">Web.Api — LoansController</div>
-            <div class="step-title">Controller LoanBookCommand Oluşturur</div>
-            <div class="step-detail">JSON → DTO dönüşümü otomatik. Controller DTO'yu alır, Command nesnesini yaratır. İş mantığı yoktur.</div>
+            <div class="step-title"><span class="tr">Controller LoanBookCommand Oluşturur</span><span class="en">Controller Creates LoanBookCommand</span></div>
+            <div class="step-detail"><span class="tr">JSON → DTO dönüşümü otomatik. Controller DTO'yu alır, Command nesnesini yaratır. İş mantığı yoktur.</span><span class="en">JSON → DTO conversion is automatic. Controller receives DTO, creates the Command object. No business logic here.</span></div>
             <div class="step-code cmd-code">// LoansController.cs
 var command = new LoanBookCommand
 {
-  BookId  = dto.BookId,
+  BookId   = dto.BookId,
   MemberId = dto.MemberId,
   DueDate  = dto.DueDate
 };
 await _dispatcher.SendCommandAsync&lt;LoanResponseDto&gt;(command, ct);</div>
-            <div class="expand-hint">▸ koda bak</div>
+            <div class="expand-hint"><span class="tr">▸ koda bak</span><span class="en">▸ view code</span></div>
           </div>
         </div>
 
@@ -681,8 +235,8 @@ await _dispatcher.SendCommandAsync&lt;LoanResponseDto&gt;(command, ct);</div>
           <div class="step-num cmd-n">3</div>
           <div class="step-body">
             <div class="step-layer">SharedKernel — Dispatcher</div>
-            <div class="step-title">Dispatcher Doğru Handler'ı Bulur</div>
-            <div class="step-detail">Reflection ile ICommandHandler&lt;LoanBookCommand, LoanResponseDto&gt; tipini oluşturur. DI container'a sorar, LoanBookCommandHandler'ı döndürür.</div>
+            <div class="step-title"><span class="tr">Dispatcher Doğru Handler'ı Bulur</span><span class="en">Dispatcher Finds the Correct Handler</span></div>
+            <div class="step-detail"><span class="tr">Reflection ile ICommandHandler tipini oluşturur. DI container'a sorar, LoanBookCommandHandler'ı döndürür.</span><span class="en">Uses Reflection to build the ICommandHandler type. Queries DI container, returns LoanBookCommandHandler.</span></div>
             <div class="step-code cmd-code">// Dispatcher.cs
 var handlerType = typeof(ICommandHandler&lt;,&gt;)
   .MakeGenericType(command.GetType(), typeof(TResult));
@@ -691,7 +245,7 @@ dynamic handler =
   _serviceProvider.GetRequiredService(handlerType);
 
 return handler.HandleAsync((dynamic)command, ct);</div>
-            <div class="expand-hint">▸ koda bak</div>
+            <div class="expand-hint"><span class="tr">▸ koda bak</span><span class="en">▸ view code</span></div>
           </div>
         </div>
 
@@ -699,17 +253,17 @@ return handler.HandleAsync((dynamic)command, ct);</div>
           <div class="step-num cmd-n">4</div>
           <div class="step-body">
             <div class="step-layer">Application — LoanBookCommandHandler</div>
-            <div class="step-title">Handler Kitabı ve Üyeyi Doğrular</div>
-            <div class="step-detail">Repository'den Book ve Member çeker. Bulunamazsa NotFoundException fırlatır → 404 döner.</div>
+            <div class="step-title"><span class="tr">Handler Kitabı ve Üyeyi Doğrular</span><span class="en">Handler Validates Book and Member</span></div>
+            <div class="step-detail"><span class="tr">Repository'den Book ve Member çeker. Bulunamazsa NotFoundException fırlatır → 404 döner.</span><span class="en">Fetches Book and Member from repository. Throws NotFoundException if not found → returns 404.</span></div>
             <div class="step-code cmd-code">// LoanBookCommandHandler.cs
 var book = await _bookRepository.GetByIdAsync(command.BookId, ct);
 if (book == null)
-  throw new NotFoundException("Kitap", command.BookId);
+  throw new NotFoundException("Book", command.BookId);
 
 var member = await _memberRepository.GetByIdAsync(command.MemberId, ct);
 if (member == null)
-  throw new NotFoundException("Üye", command.MemberId);</div>
-            <div class="expand-hint">▸ koda bak</div>
+  throw new NotFoundException("Member", command.MemberId);</div>
+            <div class="expand-hint"><span class="tr">▸ koda bak</span><span class="en">▸ view code</span></div>
           </div>
         </div>
 
@@ -717,18 +271,18 @@ if (member == null)
           <div class="step-num cmd-n">5</div>
           <div class="step-body">
             <div class="step-layer">Domain — Book Entity</div>
-            <div class="step-title">İş Kuralı Entity'de Uygulanır</div>
-            <div class="step-detail">book.DecreaseCopy() çağrılır. AvailableCopies 0 ise DomainException fırlatılır. Handler bu kuralı bilmez, entity bilir.</div>
+            <div class="step-title"><span class="tr">İş Kuralı Entity'de Uygulanır</span><span class="en">Business Rule Applied Inside Entity</span></div>
+            <div class="step-detail"><span class="tr">book.DecreaseCopy() çağrılır. AvailableCopies 0 ise DomainException fırlatılır. Handler bu kuralı bilmez, entity bilir.</span><span class="en">book.DecreaseCopy() is called. Throws DomainException if AvailableCopies is 0. The Handler doesn't know this rule — the entity does.</span></div>
             <div class="step-code cmd-code">// Book.cs (Domain Entity)
 public void DecreaseCopy()
 {
   if (AvailableCopies &lt;= 0)
     throw new DomainException(
-      $"'{Title}' kitabının müsait kopyası kalmadı.");
+      $"No available copies of '{Title}'.");
 
-  AvailableCopies--;  // private set — sadece entity değiştirebilir
+  AvailableCopies--;  // private set — only entity can change
 }</div>
-            <div class="expand-hint">▸ koda bak</div>
+            <div class="expand-hint"><span class="tr">▸ koda bak</span><span class="en">▸ view code</span></div>
           </div>
         </div>
 
@@ -736,16 +290,16 @@ public void DecreaseCopy()
           <div class="step-num cmd-n">6</div>
           <div class="step-body">
             <div class="step-layer">Domain — Loan Entity</div>
-            <div class="step-title">Loan.Create() ile Ödünç Kaydı Oluşturulur</div>
-            <div class="step-detail">Factory method geçerlilik kontrolü yapar. DueDate geçmiş bir tarihse DomainException fırlatılır.</div>
+            <div class="step-title"><span class="tr">Loan.Create() ile Ödünç Kaydı Oluşturulur</span><span class="en">Loan Record Created via Loan.Create()</span></div>
+            <div class="step-detail"><span class="tr">Factory method geçerlilik kontrolü yapar. DueDate geçmiş bir tarihse DomainException fırlatılır.</span><span class="en">Factory method performs validation. Throws DomainException if DueDate is in the past.</span></div>
             <div class="step-code cmd-code">// Loan.cs (Domain Entity)
 var loan = Loan.Create(
   command.BookId, command.MemberId, command.DueDate);
 
-// Loan.Create içinde:
+// Inside Loan.Create():
 if (dueDate &lt;= DateTime.UtcNow)
-  throw new DomainException("Son iade tarihi bugünden ileri olmalı");</div>
-            <div class="expand-hint">▸ koda bak</div>
+  throw new DomainException("Due date must be in the future.");</div>
+            <div class="expand-hint"><span class="tr">▸ koda bak</span><span class="en">▸ view code</span></div>
           </div>
         </div>
 
@@ -753,128 +307,76 @@ if (dueDate &lt;= DateTime.UtcNow)
           <div class="step-num cmd-n">7</div>
           <div class="step-body">
             <div class="step-layer">Infrastructure — Repository</div>
-            <div class="step-title">Repository Veritabanına Kaydeder</div>
-            <div class="step-detail">Book güncellenir, Loan eklenir. EF Core SaveChangesAsync çağrılır. Handler bu detayı bilmez.</div>
-            <div class="step-code cmd-code">// BookRepository.cs
-await _bookRepository.UpdateAsync(book, ct);
+            <div class="step-title"><span class="tr">Repository Veritabanına Kaydeder</span><span class="en">Repository Persists to Database</span></div>
+            <div class="step-detail"><span class="tr">Book güncellenir, Loan eklenir. EF Core SaveChangesAsync çağrılır. Handler bu detayı bilmez.</span><span class="en">Book is updated, Loan is added. EF Core SaveChangesAsync is called. Handler is unaware of these details.</span></div>
+            <div class="step-code cmd-code">await _bookRepository.UpdateAsync(book, ct);
 // → _context.Books.Update(book); SaveChangesAsync(ct);
 
-// LoanRepository.cs
 await _loanRepository.AddAsync(loan, ct);
 // → _context.Loans.AddAsync(loan); SaveChangesAsync(ct);</div>
-            <div class="expand-hint">▸ koda bak</div>
+            <div class="expand-hint"><span class="tr">▸ koda bak</span><span class="en">▸ view code</span></div>
           </div>
         </div>
 
         <div class="step" onclick="toggleStep(this)">
           <div class="step-num cmd-n">8</div>
           <div class="step-body">
-            <div class="step-layer">Web.Api — Yanıt</div>
-            <div class="step-title">200 OK + LoanResponseDto Döner</div>
-            <div class="step-detail">Entity DTO'ya dönüştürülür. Controller Ok(result) döndürür. Kullanıcı ödünç kaydını alır.</div>
-            <div class="step-code cmd-code">// HTTP Response
-200 OK
+            <div class="step-layer">Web.Api</div>
+            <div class="step-title"><span class="tr">200 OK + LoanResponseDto Döner</span><span class="en">200 OK + LoanResponseDto Returned</span></div>
+            <div class="step-detail"><span class="tr">Entity DTO'ya dönüştürülür. Controller Ok(result) döndürür.</span><span class="en">Entity is mapped to DTO. Controller returns Ok(result).</span></div>
+            <div class="step-code cmd-code">// HTTP Response 200 OK
 {
   "id": 1,
   "bookTitle": "Clean Code",
-  "memberFullName": "Ayşe Kaya",
+  "memberFullName": "Jane Doe",
   "loanDate": "2026-05-09T10:00:00Z",
   "dueDate": "2026-06-01T00:00:00Z",
   "returnDate": null,
   "isActive": true
 }</div>
-            <div class="expand-hint">▸ koda bak</div>
+            <div class="expand-hint"><span class="tr">▸ koda bak</span><span class="en">▸ view code</span></div>
           </div>
         </div>
 
       </div>
     </div>
 
-    <!-- Big visual flow -->
     <div>
       <div class="big-flow">
-
-        <div class="bf-row">
-          <div class="bf-layer">HTTP</div>
-          <div class="bf-node n-http">
-            <div class="bf-name">POST /api/loans</div>
-            <div class="bf-action">{ bookId, memberId, dueDate }</div>
-          </div>
-        </div>
-        <div class="bf-connector c-cmd"><span class="bf-connector-label">JSON → DTO dönüşümü</span></div>
-
-        <div class="bf-row">
-          <div class="bf-layer">Web.Api</div>
-          <div class="bf-node n-ctrl">
-            <div class="bf-name">LoansController</div>
-            <div class="bf-action">LoanBookCommand oluşturur</div>
-          </div>
-        </div>
+        <div class="bf-row"><div class="bf-layer">HTTP</div><div class="bf-node n-http"><div class="bf-name">POST /api/loans</div><div class="bf-action">{ bookId, memberId, dueDate }</div></div></div>
+        <div class="bf-connector c-cmd"><span class="bf-connector-label"><span class="tr">JSON → DTO dönüşümü</span><span class="en">JSON → DTO conversion</span></span></div>
+        <div class="bf-row"><div class="bf-layer">Web.Api</div><div class="bf-node n-ctrl"><div class="bf-name">LoansController</div><div class="bf-action"><span class="tr">LoanBookCommand oluşturur</span><span class="en">Creates LoanBookCommand</span></div></div></div>
         <div class="bf-connector c-cmd"><span class="bf-connector-label">SendCommandAsync(command)</span></div>
-
-        <div class="bf-row">
-          <div class="bf-layer">SharedKernel</div>
-          <div class="bf-node n-disp">
-            <div class="bf-name">Dispatcher</div>
-            <div class="bf-action">Reflection → Handler bulur</div>
-          </div>
-        </div>
+        <div class="bf-row"><div class="bf-layer">SharedKernel</div><div class="bf-node n-disp"><div class="bf-name">Dispatcher</div><div class="bf-action"><span class="tr">Reflection → Handler bulur</span><span class="en">Reflection → finds Handler</span></div></div></div>
         <div class="bf-connector c-cmd"><span class="bf-connector-label">HandleAsync(command)</span></div>
-
-        <div class="bf-row">
-          <div class="bf-layer">Application</div>
-          <div class="bf-node n-cmd">
-            <div class="bf-name">LoanBookCommandHandler</div>
-            <div class="bf-action">Orkestrasyon — 3 repository kullanır</div>
-          </div>
-        </div>
-        <div class="bf-connector c-dom"><span class="bf-connector-label">book.DecreaseCopy() — iş kuralı</span></div>
-
-        <div class="bf-row">
-          <div class="bf-layer">Domain</div>
-          <div class="bf-node n-dom">
-            <div class="bf-name">Book.DecreaseCopy()</div>
-            <div class="bf-action">AvailableCopies-- ya da DomainException</div>
-          </div>
-        </div>
+        <div class="bf-row"><div class="bf-layer">Application</div><div class="bf-node n-cmd"><div class="bf-name">LoanBookCommandHandler</div><div class="bf-action"><span class="tr">Orkestrasyon — 3 repository</span><span class="en">Orchestration — 3 repositories</span></div></div></div>
+        <div class="bf-connector c-dom"><span class="bf-connector-label"><span class="tr">book.DecreaseCopy() — iş kuralı</span><span class="en">book.DecreaseCopy() — business rule</span></span></div>
+        <div class="bf-row"><div class="bf-layer">Domain</div><div class="bf-node n-dom"><div class="bf-name">Book.DecreaseCopy()</div><div class="bf-action"><span class="tr">AvailableCopies-- ya da Exception</span><span class="en">AvailableCopies-- or Exception</span></div></div></div>
         <div class="bf-connector c-inf"><span class="bf-connector-label">UpdateAsync + AddAsync</span></div>
-
-        <div class="bf-row">
-          <div class="bf-layer">Infrastructure</div>
-          <div class="bf-node n-repo">
-            <div class="bf-name">BookRepository + LoanRepository</div>
-            <div class="bf-action">EF Core — SaveChangesAsync</div>
-          </div>
-        </div>
-        <div class="bf-connector c-inf"><span class="bf-connector-label">SQL yazma işlemi</span></div>
-
-        <div class="bf-row">
-          <div class="bf-layer">Veritabanı</div>
-          <div class="bf-node n-db">
-            <div class="bf-name">library.db (SQLite)</div>
-            <div class="bf-action">Books güncellendi, Loans eklendi</div>
-          </div>
-        </div>
-
+        <div class="bf-row"><div class="bf-layer">Infrastructure</div><div class="bf-node n-repo"><div class="bf-name">BookRepo + LoanRepo</div><div class="bf-action">EF Core — SaveChangesAsync</div></div></div>
+        <div class="bf-connector c-inf"><span class="bf-connector-label"><span class="tr">SQL yazma işlemi</span><span class="en">SQL write operation</span></span></div>
+        <div class="bf-row"><div class="bf-layer"><span class="tr">Veritabanı</span><span class="en">Database</span></div><div class="bf-node n-db"><div class="bf-name">library.db (SQLite)</div><div class="bf-action"><span class="tr">Books güncellendi, Loans eklendi</span><span class="en">Books updated, Loans inserted</span></div></div></div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════ -->
-<!-- PANEL 2: QUERY FLOW -->
-<!-- ══════════════════════════════════════════════════════════ -->
+<!-- ══════════════ PANEL 2: QUERY ══════════════ -->
 <div id="panel-qry" class="panel">
-
-  <div class="section-title"><span class="badge badge-qry">● Query</span> Geciken Kitapları Listeleme — Okuma Akışı</div>
-  <p style="font-size:0.72rem;color:var(--muted);margin-bottom:1.5rem;line-height:1.7">
-    GET /api/loans/overdue isteği atıldığında. Hiçbir veri değişmez — sadece okunur.
-    Her adıma tıkla → kodu gör.
-  </p>
+  <div class="section-title">
+    <span class="badge badge-qry">● Query</span>
+    <span class="tr">Geciken Kitapları Listeleme — Okuma Akışı</span>
+    <span class="en">Overdue Books — Read Flow</span>
+  </div>
+  <p class="tr" style="font-size:0.72rem;color:var(--muted);margin-bottom:1.5rem;line-height:1.7">GET /api/loans/overdue isteği atıldığında. Hiçbir veri değişmez — sadece okunur. Her adıma tıkla → kodu gör.</p>
+  <p class="en" style="font-size:0.72rem;color:var(--muted);margin-bottom:1.5rem;line-height:1.7">When GET /api/loans/overdue is called. No data is modified — read only. Click each step → view code.</p>
 
   <div class="split">
     <div class="flow-card">
-      <div class="flow-card-header qry-h"><span class="dot dot-qry"></span>QUERY — Okuma Zinciri</div>
+      <div class="flow-card-header qry-h">
+        <span class="dot dot-qry"></span>
+        <span class="tr">QUERY — Okuma Zinciri</span><span class="en">QUERY — Read Chain</span>
+      </div>
       <div class="flow-steps">
 
         <div class="step" onclick="toggleStep(this)">
@@ -882,10 +384,10 @@ await _loanRepository.AddAsync(loan, ct);
           <div class="step-body">
             <div class="step-layer">HTTP</div>
             <div class="step-title">GET /api/loans/overdue</div>
-            <div class="step-detail">Parametresiz GET isteği. Body yok, değişiklik yok.</div>
+            <div class="step-detail"><span class="tr">Parametresiz GET isteği. Body yok, değişiklik yok.</span><span class="en">Parameterless GET request. No body, no changes.</span></div>
             <div class="step-code qry-code">GET /api/loans/overdue HTTP/1.1
-// Herhangi bir body yok — sadece okuma talebi</div>
-            <div class="expand-hint">▸ koda bak</div>
+// No request body — read-only request</div>
+            <div class="expand-hint"><span class="tr">▸ koda bak</span><span class="en">▸ view code</span></div>
           </div>
         </div>
 
@@ -893,15 +395,15 @@ await _loanRepository.AddAsync(loan, ct);
           <div class="step-num qry-n">2</div>
           <div class="step-body">
             <div class="step-layer">Web.Api — LoansController</div>
-            <div class="step-title">Controller GetOverdueLoansQuery Oluşturur</div>
-            <div class="step-detail">Query nesnesi parametresiz. Controller sadece "gecikenleri getir" talebini Dispatcher'a iletir.</div>
+            <div class="step-title"><span class="tr">Controller GetOverdueLoansQuery Oluşturur</span><span class="en">Controller Creates GetOverdueLoansQuery</span></div>
+            <div class="step-detail"><span class="tr">Query nesnesi parametresiz. Controller sadece talebi Dispatcher'a iletir.</span><span class="en">Query object has no parameters. Controller simply forwards the request to Dispatcher.</span></div>
             <div class="step-code qry-code">// LoansController.cs
 var result = await _dispatcher
   .SendQueryAsync&lt;List&lt;LoanResponseDto&gt;&gt;(
     new GetOverdueLoansQuery(), ct);
 
 return Ok(result);</div>
-            <div class="expand-hint">▸ koda bak</div>
+            <div class="expand-hint"><span class="tr">▸ koda bak</span><span class="en">▸ view code</span></div>
           </div>
         </div>
 
@@ -909,9 +411,9 @@ return Ok(result);</div>
           <div class="step-num qry-n">3</div>
           <div class="step-body">
             <div class="step-layer">SharedKernel — Dispatcher</div>
-            <div class="step-title">Dispatcher QueryHandler'ı Bulur</div>
-            <div class="step-detail">IQueryHandler&lt;GetOverdueLoansQuery, List&lt;LoanResponseDto&gt;&gt; tipini arar. GetOverdueLoansQueryHandler'ı döndürür.</div>
-            <div class="step-code qry-code">// Dispatcher.cs — SendQueryAsync
+            <div class="step-title"><span class="tr">Dispatcher QueryHandler'ı Bulur</span><span class="en">Dispatcher Finds the QueryHandler</span></div>
+            <div class="step-detail"><span class="tr">IQueryHandler tipini arar ve GetOverdueLoansQueryHandler'ı döndürür.</span><span class="en">Looks up the IQueryHandler type and returns GetOverdueLoansQueryHandler.</span></div>
+            <div class="step-code qry-code">// Dispatcher.cs
 var handlerType = typeof(IQueryHandler&lt;,&gt;)
   .MakeGenericType(query.GetType(), typeof(TResult));
 
@@ -919,7 +421,7 @@ dynamic handler =
   _serviceProvider.GetRequiredService(handlerType);
 
 return handler.HandleAsync((dynamic)query, ct);</div>
-            <div class="expand-hint">▸ koda bak</div>
+            <div class="expand-hint"><span class="tr">▸ koda bak</span><span class="en">▸ view code</span></div>
           </div>
         </div>
 
@@ -927,23 +429,21 @@ return handler.HandleAsync((dynamic)query, ct);</div>
           <div class="step-num qry-n">4</div>
           <div class="step-body">
             <div class="step-layer">Application — GetOverdueLoansQueryHandler</div>
-            <div class="step-title">QueryHandler Sadece Okur</div>
-            <div class="step-detail">SaveChangesAsync yok. Entity metodu yok. Hiçbir şeyi değiştirmiyor. Repository'den okur, DTO'ya dönüştürür.</div>
-            <div class="step-code qry-code">// GetOverdueLoansQueryHandler.cs
-public async Task&lt;List&lt;LoanResponseDto&gt;&gt; HandleAsync(
+            <div class="step-title"><span class="tr">QueryHandler Sadece Okur</span><span class="en">QueryHandler Only Reads</span></div>
+            <div class="step-detail"><span class="tr">SaveChangesAsync yok. Entity metodu yok. Hiçbir şeyi değiştirmiyor.</span><span class="en">No SaveChangesAsync. No entity method calls. Nothing is modified.</span></div>
+            <div class="step-code qry-code">public async Task&lt;List&lt;LoanResponseDto&gt;&gt; HandleAsync(
   GetOverdueLoansQuery query, CancellationToken ct)
 {
   var loans = await _loanRepository
-    .GetOverdueLoansAsync(ct);  // sadece okuma
+    .GetOverdueLoansAsync(ct);  // read only
 
   return loans.Select(l =&gt; new LoanResponseDto
   {
     Id = l.Id,
-    BookTitle = l.Book.Title,
-    // ...
+    BookTitle = l.Book.Title, // ...
   }).ToList();
 }</div>
-            <div class="expand-hint">▸ koda bak</div>
+            <div class="expand-hint"><span class="tr">▸ koda bak</span><span class="en">▸ view code</span></div>
           </div>
         </div>
 
@@ -951,114 +451,67 @@ public async Task&lt;List&lt;LoanResponseDto&gt;&gt; HandleAsync(
           <div class="step-num qry-n">5</div>
           <div class="step-body">
             <div class="step-layer">Infrastructure — LoanRepository</div>
-            <div class="step-title">Repository Filtrelenmiş Sorgu Çalıştırır</div>
-            <div class="step-detail">EF Core'un Where + Include ile optimize sorgusu. Sadece geciken kayıtlar çekilir. Book ve Member ilişkileri JOIN ile tek sorguda gelir.</div>
-            <div class="step-code qry-code">// LoanRepository.cs
-public async Task&lt;List&lt;Loan&gt;&gt; GetOverdueLoansAsync(CancellationToken ct)
+            <div class="step-title"><span class="tr">Repository Filtrelenmiş Sorgu Çalıştırır</span><span class="en">Repository Runs Filtered Query</span></div>
+            <div class="step-detail"><span class="tr">Where + Include ile optimize EF Core sorgusu. Sadece geciken kayıtlar çekilir.</span><span class="en">Optimized EF Core query with Where + Include. Only overdue records are fetched.</span></div>
+            <div class="step-code qry-code">public async Task&lt;List&lt;Loan&gt;&gt; GetOverdueLoansAsync(CancellationToken ct)
 {
   var today = DateTime.UtcNow;
   return await _context.Loans
-    .Include(l =&gt; l.Book)    // JOIN ile Book verisi
-    .Include(l =&gt; l.Member)  // JOIN ile Member verisi
+    .Include(l =&gt; l.Book)
+    .Include(l =&gt; l.Member)
     .Where(l =&gt; l.ReturnDate == null
-             &amp;&amp; l.DueDate &lt; today)  // filtre
+             &amp;&amp; l.DueDate &lt; today)
     .ToListAsync(ct);
 }</div>
-            <div class="expand-hint">▸ koda bak</div>
+            <div class="expand-hint"><span class="tr">▸ koda bak</span><span class="en">▸ view code</span></div>
           </div>
         </div>
 
         <div class="step" onclick="toggleStep(this)">
           <div class="step-num qry-n">6</div>
           <div class="step-body">
-            <div class="step-layer">Web.Api — Yanıt</div>
-            <div class="step-title">200 OK + Geciken Ödünç Listesi</div>
-            <div class="step-detail">Hiçbir şey değişmedi. Aynı sorgu 100 kez çalışsa da sonuç aynı — pure read.</div>
-            <div class="step-code qry-code">// HTTP Response
-200 OK
+            <div class="step-layer">Web.Api</div>
+            <div class="step-title"><span class="tr">200 OK + Geciken Ödünç Listesi</span><span class="en">200 OK + Overdue Loan List</span></div>
+            <div class="step-detail"><span class="tr">Hiçbir şey değişmedi. Aynı sorgu 100 kez çalışsa da sonuç aynı — pure read.</span><span class="en">Nothing changed. Running the same query 100 times yields the same result — pure read.</span></div>
+            <div class="step-code qry-code">// HTTP Response 200 OK
 [
   {
     "id": 3,
     "bookTitle": "Design Patterns",
-    "memberFullName": "Mehmet Yılmaz",
+    "memberFullName": "John Smith",
     "loanDate": "2026-03-01T...",
     "dueDate": "2026-04-01T...",
     "returnDate": null,
     "isActive": true,
-    "isOverdue": true  // hesaplanan alan
+    "isOverdue": true
   }
 ]</div>
-            <div class="expand-hint">▸ koda bak</div>
+            <div class="expand-hint"><span class="tr">▸ koda bak</span><span class="en">▸ view code</span></div>
           </div>
         </div>
 
       </div>
     </div>
 
-    <!-- Query visual flow -->
     <div>
       <div class="big-flow">
-
-        <div class="bf-row">
-          <div class="bf-layer">HTTP</div>
-          <div class="bf-node n-http">
-            <div class="bf-name">GET /api/loans/overdue</div>
-            <div class="bf-action">Parametresiz — sadece okuma</div>
-          </div>
-        </div>
-        <div class="bf-connector c-qry"><span class="bf-connector-label">route eşleşmesi</span></div>
-
-        <div class="bf-row">
-          <div class="bf-layer">Web.Api</div>
-          <div class="bf-node n-ctrl">
-            <div class="bf-name">LoansController</div>
-            <div class="bf-action">GetOverdueLoansQuery oluşturur</div>
-          </div>
-        </div>
+        <div class="bf-row"><div class="bf-layer">HTTP</div><div class="bf-node n-http"><div class="bf-name">GET /api/loans/overdue</div><div class="bf-action"><span class="tr">Parametresiz — sadece okuma</span><span class="en">No params — read only</span></div></div></div>
+        <div class="bf-connector c-qry"><span class="bf-connector-label"><span class="tr">route eşleşmesi</span><span class="en">route match</span></span></div>
+        <div class="bf-row"><div class="bf-layer">Web.Api</div><div class="bf-node n-ctrl"><div class="bf-name">LoansController</div><div class="bf-action"><span class="tr">GetOverdueLoansQuery oluşturur</span><span class="en">Creates GetOverdueLoansQuery</span></div></div></div>
         <div class="bf-connector c-qry"><span class="bf-connector-label">SendQueryAsync(query)</span></div>
-
-        <div class="bf-row">
-          <div class="bf-layer">SharedKernel</div>
-          <div class="bf-node n-disp">
-            <div class="bf-name">Dispatcher</div>
-            <div class="bf-action">IQueryHandler tipini bulur</div>
-          </div>
-        </div>
+        <div class="bf-row"><div class="bf-layer">SharedKernel</div><div class="bf-node n-disp"><div class="bf-name">Dispatcher</div><div class="bf-action"><span class="tr">IQueryHandler tipini bulur</span><span class="en">Finds IQueryHandler type</span></div></div></div>
         <div class="bf-connector c-qry"><span class="bf-connector-label">HandleAsync(query)</span></div>
-
-        <div class="bf-row">
-          <div class="bf-layer">Application</div>
-          <div class="bf-node n-qry">
-            <div class="bf-name">GetOverdueLoansQueryHandler</div>
-            <div class="bf-action">Sadece okur — SaveChanges YOK</div>
-          </div>
-        </div>
+        <div class="bf-row"><div class="bf-layer">Application</div><div class="bf-node n-qry"><div class="bf-name">GetOverdueLoansQueryHandler</div><div class="bf-action"><span class="tr">Sadece okur — SaveChanges YOK</span><span class="en">Read only — NO SaveChanges</span></div></div></div>
         <div class="bf-connector c-inf"><span class="bf-connector-label">GetOverdueLoansAsync()</span></div>
-
-        <div class="bf-row">
-          <div class="bf-layer">Infrastructure</div>
-          <div class="bf-node n-repo">
-            <div class="bf-name">LoanRepository</div>
-            <div class="bf-action">Where + Include → ToListAsync</div>
-          </div>
-        </div>
-        <div class="bf-connector c-inf"><span class="bf-connector-label">SELECT sorgusu</span></div>
-
-        <div class="bf-row">
-          <div class="bf-layer">Veritabanı</div>
-          <div class="bf-node n-db">
-            <div class="bf-name">library.db (SQLite)</div>
-            <div class="bf-action">Sadece READ — hiçbir şey değişmedi</div>
-          </div>
-        </div>
+        <div class="bf-row"><div class="bf-layer">Infrastructure</div><div class="bf-node n-repo"><div class="bf-name">LoanRepository</div><div class="bf-action">Where + Include → ToListAsync</div></div></div>
+        <div class="bf-connector c-inf"><span class="bf-connector-label">SELECT query</span></div>
+        <div class="bf-row"><div class="bf-layer"><span class="tr">Veritabanı</span><span class="en">Database</span></div><div class="bf-node n-db"><div class="bf-name">library.db (SQLite)</div><div class="bf-action"><span class="tr">Sadece READ — hiçbir şey değişmedi</span><span class="en">READ only — nothing changed</span></div></div></div>
 
         <div style="margin-top:1rem;padding:0.8rem;border:1px solid rgba(6,182,212,0.2);border-radius:6px;background:rgba(6,182,212,0.05)">
-          <div style="font-size:0.65rem;color:var(--qry);font-weight:700;margin-bottom:0.3rem">⚡ QUERY FARKI</div>
+          <div style="font-size:0.65rem;color:var(--qry);font-weight:700;margin-bottom:0.3rem">⚡ <span class="tr">QUERY FARKI</span><span class="en">QUERY DIFFERENCE</span></div>
           <div style="font-size:0.65rem;color:var(--muted);line-height:1.6">
-            Bu zincirde Domain entity'sine hiç dokunulmadı.<br>
-            book.DecreaseCopy() gibi iş kuralı metodu çağrılmadı.<br>
-            SaveChangesAsync hiç çağrılmadı.<br>
-            <span style="color:var(--qry)">Saf okuma — yan etki sıfır.</span>
+            <span class="tr">Bu zincirde Domain entity'sine hiç dokunulmadı.<br>book.DecreaseCopy() gibi iş kuralı metodu çağrılmadı.<br>SaveChangesAsync hiç çağrılmadı.<br><span style="color:var(--qry)">Saf okuma — yan etki sıfır.</span></span>
+            <span class="en">No domain entity was touched in this chain.<br>No business rule method like book.DecreaseCopy() was called.<br>SaveChangesAsync was never called.<br><span style="color:var(--qry)">Pure read — zero side effects.</span></span>
           </div>
         </div>
       </div>
@@ -1066,12 +519,12 @@ public async Task&lt;List&lt;Loan&gt;&gt; GetOverdueLoansAsync(CancellationToken
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════ -->
-<!-- PANEL 3: ARCHITECTURE -->
-<!-- ══════════════════════════════════════════════════════════ -->
+<!-- ══════════════ PANEL 3: ARCH ══════════════ -->
 <div id="panel-arch" class="panel">
-
-  <div class="section-title">Katman Mimarisi — Kim Kimi Tanır?</div>
+  <div class="section-title">
+    <span class="tr">Katman Mimarisi — Kim Kimi Tanır?</span>
+    <span class="en">Layer Architecture — Who Knows Whom?</span>
+  </div>
 
   <div class="dep-flow">
     <div class="dep-box" style="background:rgba(234,179,8,0.1);color:var(--shared);border:1px solid rgba(234,179,8,0.3)">SharedKernel</div>
@@ -1083,15 +536,17 @@ public async Task&lt;List&lt;Loan&gt;&gt; GetOverdueLoansAsync(CancellationToken
     <div class="dep-box" style="background:var(--infra-dim);color:var(--infra);border:1px solid rgba(34,197,94,0.3)">Infrastructure</div>
     <div class="dep-arrow-h" style="opacity:0.3">|</div>
     <div class="dep-box" style="background:rgba(148,163,184,0.08);color:#94a3b8;border:1px solid rgba(148,163,184,0.2)">Web.Api</div>
-    <div class="dep-note">← ok "bağımlıdır" anlamına gelir. Domain hiçbir şeye bağımlı değil. Her şey Domain'e bağımlı.</div>
+    <div class="dep-note">
+      <span class="tr">← ok "bağımlıdır" anlamına gelir. Domain hiçbir şeye bağımlı değil. Her şey Domain'e bağımlı.</span>
+      <span class="en">← arrow means "depends on". Domain depends on nothing. Everything depends on Domain.</span>
+    </div>
   </div>
 
   <div class="arch-grid">
-
     <div class="arch-card sk">
       <div class="arch-layer-tag">SharedKernel</div>
-      <div class="arch-title">Ortak Sözleşmeler</div>
-      <div class="arch-desc">Tüm katmanların kullandığı temel arayüzler. Döngüsel bağımlılığı önler.</div>
+      <div class="arch-title"><span class="tr">Ortak Sözleşmeler</span><span class="en">Common Contracts</span></div>
+      <div class="arch-desc"><span class="tr">Tüm katmanların kullandığı temel arayüzler. Döngüsel bağımlılığı önler.</span><span class="en">Core interfaces used by all layers. Prevents circular dependencies.</span></div>
       <div class="arch-files">
         <div class="arch-file">ICommand&lt;TResult&gt;</div>
         <div class="arch-file">IQuery&lt;TResult&gt;</div>
@@ -1101,26 +556,24 @@ public async Task&lt;List&lt;Loan&gt;&gt; GetOverdueLoansAsync(CancellationToken
         <div class="arch-file">BaseEntity</div>
       </div>
     </div>
-
     <div class="arch-card dom">
       <div class="arch-layer-tag">Domain</div>
-      <div class="arch-title">İş Kuralları Kalbi</div>
-      <div class="arch-desc">EF Core, ASP.NET — hiçbir dış bağımlılık yok. Saf C#. Kurallar entity içinde yaşar.</div>
+      <div class="arch-title"><span class="tr">İş Kuralları Kalbi</span><span class="en">Heart of Business Rules</span></div>
+      <div class="arch-desc"><span class="tr">Hiçbir dış bağımlılık yok. Saf C#. Kurallar entity içinde yaşar.</span><span class="en">No external dependencies. Pure C#. Rules live inside entities.</span></div>
       <div class="arch-files">
         <div class="arch-file">Book.cs — DecreaseCopy()</div>
         <div class="arch-file">Member.cs — Create()</div>
         <div class="arch-file">Loan.cs — Return(), IsOverdue()</div>
         <div class="arch-file">DomainException</div>
-        <div class="arch-file">IBookRepository (arayüz)</div>
-        <div class="arch-file">IMemberRepository (arayüz)</div>
-        <div class="arch-file">ILoanRepository (arayüz)</div>
+        <div class="arch-file">IBookRepository (<span class="tr">arayüz</span><span class="en">interface</span>)</div>
+        <div class="arch-file">IMemberRepository (<span class="tr">arayüz</span><span class="en">interface</span>)</div>
+        <div class="arch-file">ILoanRepository (<span class="tr">arayüz</span><span class="en">interface</span>)</div>
       </div>
     </div>
-
     <div class="arch-card app">
       <div class="arch-layer-tag">Application</div>
-      <div class="arch-title">CQRS Handler'ları</div>
-      <div class="arch-desc">Orkestrasyon katmanı. Her işlemin kendi Handler'ı var. Domain'i bilir, Infrastructure'ı tanımaz.</div>
+      <div class="arch-title"><span class="tr">CQRS Handler'ları</span><span class="en">CQRS Handlers</span></div>
+      <div class="arch-desc"><span class="tr">Orkestrasyon katmanı. Her işlemin kendi Handler'ı var. Domain'i bilir, Infrastructure'ı tanımaz.</span><span class="en">Orchestration layer. Each operation has its own Handler. Knows Domain, unaware of Infrastructure.</span></div>
       <div class="arch-files">
         <div class="arch-file">AddBookCommandHandler</div>
         <div class="arch-file">UpdateBookCommandHandler</div>
@@ -1135,11 +588,10 @@ public async Task&lt;List&lt;Loan&gt;&gt; GetOverdueLoansAsync(CancellationToken
         <div class="arch-file">GetAllMembersQueryHandler</div>
       </div>
     </div>
-
     <div class="arch-card inf">
       <div class="arch-layer-tag">Infrastructure</div>
-      <div class="arch-title">Teknik Detaylar</div>
-      <div class="arch-desc">EF Core, SQLite, Repository implementasyonları. Domain arayüzlerini burada uygular.</div>
+      <div class="arch-title"><span class="tr">Teknik Detaylar</span><span class="en">Technical Details</span></div>
+      <div class="arch-desc"><span class="tr">EF Core, SQLite, Repository implementasyonları. Domain arayüzlerini burada uygular.</span><span class="en">EF Core, SQLite, Repository implementations. Implements Domain interfaces here.</span></div>
       <div class="arch-files">
         <div class="arch-file">AppDbContext</div>
         <div class="arch-file">BookRepository : IBookRepository</div>
@@ -1150,11 +602,10 @@ public async Task&lt;List&lt;Loan&gt;&gt; GetOverdueLoansAsync(CancellationToken
         <div class="arch-file">DependencyInjection.cs</div>
       </div>
     </div>
-
     <div class="arch-card web">
       <div class="arch-layer-tag">Web.Api</div>
-      <div class="arch-title">HTTP Arayüzü</div>
-      <div class="arch-desc">Sadece HTTP ↔ Command/Query dönüşümü. İş mantığı sıfır. Dispatcher kullanır.</div>
+      <div class="arch-title"><span class="tr">HTTP Arayüzü</span><span class="en">HTTP Interface</span></div>
+      <div class="arch-desc"><span class="tr">Sadece HTTP ↔ Command/Query dönüşümü. İş mantığı sıfır. Dispatcher kullanır.</span><span class="en">Only HTTP ↔ Command/Query mapping. Zero business logic. Uses Dispatcher.</span></div>
       <div class="arch-files">
         <div class="arch-file">BooksController</div>
         <div class="arch-file">MembersController</div>
@@ -1163,140 +614,120 @@ public async Task&lt;List&lt;Loan&gt;&gt; GetOverdueLoansAsync(CancellationToken
         <div class="arch-file">appsettings.json</div>
       </div>
     </div>
-
   </div>
 
-  <div class="section-title">Bağımlılık Kuralı — Detay</div>
+  <div class="section-title">
+    <span class="tr">Bağımlılık Kuralı</span><span class="en">Dependency Rule</span>
+  </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;font-size:0.7rem;line-height:1.7">
     <div style="padding:1rem;border:1px solid var(--border);border-radius:6px;background:var(--surface)">
-      <div style="color:var(--text-bright);font-weight:700;margin-bottom:0.5rem">✓ İzin Verilen Bağımlılıklar</div>
-      <div style="color:var(--muted)">
-        Web.Api → Application ✓<br>
-        Web.Api → Infrastructure ✓<br>
-        Application → Domain ✓<br>
-        Application → SharedKernel ✓<br>
-        Infrastructure → Domain ✓<br>
-        Domain → SharedKernel ✓
-      </div>
+      <div style="color:var(--text-bright);font-weight:700;margin-bottom:0.5rem"><span class="tr">✓ İzin Verilen Bağımlılıklar</span><span class="en">✓ Allowed Dependencies</span></div>
+      <div style="color:var(--muted)">Web.Api → Application ✓<br>Web.Api → Infrastructure ✓<br>Application → Domain ✓<br>Application → SharedKernel ✓<br>Infrastructure → Domain ✓<br>Domain → SharedKernel ✓</div>
     </div>
     <div style="padding:1rem;border:1px solid rgba(239,68,68,0.2);border-radius:6px;background:rgba(239,68,68,0.05)">
-      <div style="color:#ef4444;font-weight:700;margin-bottom:0.5rem">✗ Yasak Bağımlılıklar</div>
-      <div style="color:var(--muted)">
-        Domain → Application ✗<br>
-        Domain → Infrastructure ✗<br>
-        Domain → Web.Api ✗<br>
-        Application → Infrastructure ✗<br>
-        Application → Web.Api ✗<br>
-        SharedKernel → diğerleri ✗
-      </div>
+      <div style="color:#ef4444;font-weight:700;margin-bottom:0.5rem"><span class="tr">✗ Yasak Bağımlılıklar</span><span class="en">✗ Forbidden Dependencies</span></div>
+      <div style="color:var(--muted)">Domain → Application ✗<br>Domain → Infrastructure ✗<br>Domain → Web.Api ✗<br>Application → Infrastructure ✗<br>Application → Web.Api ✗<br>SharedKernel → <span class="tr">diğerleri</span><span class="en">others</span> ✗</div>
     </div>
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════ -->
-<!-- PANEL 4: COMPARE -->
-<!-- ══════════════════════════════════════════════════════════ -->
+<!-- ══════════════ PANEL 4: COMPARE ══════════════ -->
 <div id="panel-comp" class="panel">
-
-  <div class="section-title">CRUD vs CQRS — Yan Yana Karşılaştırma</div>
+  <div class="section-title">
+    <span class="tr">CRUD vs CQRS — Yan Yana Karşılaştırma</span>
+    <span class="en">CRUD vs CQRS — Side by Side Comparison</span>
+  </div>
 
   <table class="compare-table">
     <thead>
       <tr>
-        <th>Konu</th>
-        <th>CRUD Mimarisi</th>
-        <th>CQRS + Clean Arch</th>
+        <th><span class="tr">Konu</span><span class="en">Topic</span></th>
+        <th><span class="tr">CRUD Mimarisi</span><span class="en">CRUD Architecture</span></th>
+        <th><span class="tr">CQRS + Clean Arch</span><span class="en">CQRS + Clean Arch</span></th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td>Okuma / Yazma</td>
-        <td class="bad">LoanService içinde iç içe<br><span style="opacity:0.6;font-size:0.65rem">GetOverdueLoans + LoanBook aynı sınıf</span></td>
-        <td class="good">Tamamen ayrı Handler'lar<br><span style="opacity:0.6;font-size:0.65rem">LoanBookCommandHandler + GetOverdueLoansQueryHandler</span></td>
+        <td><span class="tr">Okuma / Yazma</span><span class="en">Read / Write</span></td>
+        <td class="bad"><span class="tr">LoanService içinde iç içe</span><span class="en">Mixed inside LoanService</span><br><span style="opacity:0.6;font-size:0.65rem">GetOverdueLoans + LoanBook <span class="tr">aynı sınıf</span><span class="en">same class</span></span></td>
+        <td class="good"><span class="tr">Tamamen ayrı Handler'lar</span><span class="en">Completely separate Handlers</span><br><span style="opacity:0.6;font-size:0.65rem">LoanBookCommandHandler + GetOverdueLoansQueryHandler</span></td>
       </tr>
       <tr>
-        <td>İş Kuralı Yeri</td>
-        <td class="bad">Service metodu içine gömülü<br><span style="opacity:0.6;font-size:0.65rem">if (book.AvailableCopies &lt;= 0)</span></td>
-        <td class="good">Domain entity içinde<br><span style="opacity:0.6;font-size:0.65rem">book.DecreaseCopy() — kural entity'de</span></td>
+        <td><span class="tr">İş Kuralı Yeri</span><span class="en">Business Rule Location</span></td>
+        <td class="bad"><span class="tr">Service metodu içine gömülü</span><span class="en">Buried inside service method</span><br><span style="opacity:0.6;font-size:0.65rem">if (book.AvailableCopies &lt;= 0)</span></td>
+        <td class="good"><span class="tr">Domain entity içinde</span><span class="en">Inside domain entity</span><br><span style="opacity:0.6;font-size:0.65rem">book.DecreaseCopy()</span></td>
       </tr>
       <tr>
-        <td>Veritabanı Erişimi</td>
-        <td class="bad">Handler → DbContext direkt<br><span style="opacity:0.6;font-size:0.65rem">_context.Books.FindAsync()</span></td>
+        <td><span class="tr">Veritabanı Erişimi</span><span class="en">Database Access</span></td>
+        <td class="bad"><span class="tr">Handler → DbContext direkt</span><span class="en">Handler → DbContext directly</span><br><span style="opacity:0.6;font-size:0.65rem">_context.Books.FindAsync()</span></td>
         <td class="good">Handler → IRepository → DbContext<br><span style="opacity:0.6;font-size:0.65rem">_bookRepository.GetByIdAsync()</span></td>
       </tr>
       <tr>
-        <td>Hata Tipleri</td>
-        <td class="bad">InvalidOperationException<br><span style="opacity:0.6;font-size:0.65rem">Her durum aynı exception</span></td>
-        <td class="good">DomainException / NotFoundException<br><span style="opacity:0.6;font-size:0.65rem">Tip farklı → HTTP kodu farklı</span></td>
+        <td><span class="tr">Hata Tipleri</span><span class="en">Exception Types</span></td>
+        <td class="bad">InvalidOperationException<br><span style="opacity:0.6;font-size:0.65rem"><span class="tr">Her durum aynı exception</span><span class="en">All cases same exception</span></span></td>
+        <td class="good">DomainException / NotFoundException<br><span style="opacity:0.6;font-size:0.65rem"><span class="tr">Tip farklı → HTTP kodu farklı</span><span class="en">Different type → different HTTP code</span></span></td>
       </tr>
       <tr>
-        <td>Program.cs Yükü</td>
-        <td class="bad">Tüm kayıtlar tek dosyada<br><span style="opacity:0.6;font-size:0.65rem">AddScoped&lt;BookService&gt; vs...</span></td>
-        <td class="good">AddApplication() + AddInfrastructure()<br><span style="opacity:0.6;font-size:0.65rem">İki satır — her katman kendini yönetir</span></td>
+        <td>Program.cs</td>
+        <td class="bad"><span class="tr">Tüm kayıtlar tek dosyada</span><span class="en">All registrations in one file</span></td>
+        <td class="good">AddApplication() + AddInfrastructure()<br><span style="opacity:0.6;font-size:0.65rem"><span class="tr">İki satır</span><span class="en">Two lines</span></span></td>
       </tr>
       <tr>
-        <td>Yeni İşlem Eklemek</td>
-        <td class="bad">Var olan servise metot ekle → şişer<br><span style="opacity:0.6;font-size:0.65rem">LoanService 15 metot olabilir</span></td>
-        <td class="good">Yeni klasör + Command + Handler<br><span style="opacity:0.6;font-size:0.65rem">Mevcut hiçbir şeye dokunmadan</span></td>
+        <td><span class="tr">Yeni İşlem</span><span class="en">New Operation</span></td>
+        <td class="bad"><span class="tr">Var olan servise metot ekle → şişer</span><span class="en">Add method to existing service → bloat</span></td>
+        <td class="good"><span class="tr">Yeni klasör + Command + Handler</span><span class="en">New folder + Command + Handler</span></td>
       </tr>
       <tr>
-        <td>Test Edilebilirlik</td>
-        <td class="bad">Service tümü başlatılmalı<br><span style="opacity:0.6;font-size:0.65rem">Tüm bağımlılıklar hazırlanır</span></td>
-        <td class="good">Her Handler bağımsız test edilir<br><span style="opacity:0.6;font-size:0.65rem">Sadece IBookRepository mock'la</span></td>
+        <td><span class="tr">Test Edilebilirlik</span><span class="en">Testability</span></td>
+        <td class="bad"><span class="tr">Service tümü başlatılmalı</span><span class="en">Entire service must be initialized</span></td>
+        <td class="good"><span class="tr">Her Handler bağımsız test edilir</span><span class="en">Each Handler tested independently</span></td>
       </tr>
       <tr>
-        <td>Entity Yapısı</td>
-        <td class="bad">public set — her yer değiştirebilir<br><span style="opacity:0.6;font-size:0.65rem">book.AvailableCopies = 5</span></td>
-        <td class="good">private set — sadece entity metodu<br><span style="opacity:0.6;font-size:0.65rem">book.DecreaseCopy() zorunlu</span></td>
+        <td><span class="tr">Entity Yapısı</span><span class="en">Entity Structure</span></td>
+        <td class="bad">public set<br><span style="opacity:0.6;font-size:0.65rem">book.AvailableCopies = 5</span></td>
+        <td class="good">private set<br><span style="opacity:0.6;font-size:0.65rem">book.DecreaseCopy() <span class="tr">zorunlu</span><span class="en">required</span></span></td>
       </tr>
       <tr>
-        <td>Tablo Konfigürasyonu</td>
-        <td class="bad">Entity attribute'ları veya DbContext<br><span style="opacity:0.6;font-size:0.65rem">[Required] attribute → EF bağımlılığı</span></td>
-        <td class="good">Fluent API, ayrı Config sınıfları<br><span style="opacity:0.6;font-size:0.65rem">Entity temiz C# — EF bilmez</span></td>
+        <td><span class="tr">Tablo Konfigürasyonu</span><span class="en">Table Config</span></td>
+        <td class="bad"><span class="tr">Entity attribute'ları</span><span class="en">Entity attributes</span><br><span style="opacity:0.6;font-size:0.65rem">[Required] → EF <span class="tr">bağımlılığı</span><span class="en">dependency</span></span></td>
+        <td class="good">Fluent API<br><span style="opacity:0.6;font-size:0.65rem"><span class="tr">Entity temiz C# — EF bilmez</span><span class="en">Entity is pure C# — unaware of EF</span></span></td>
       </tr>
       <tr>
-        <td>Servis / Handler Büyümesi</td>
-        <td class="bad">BookService → sınırsız büyür<br><span style="opacity:0.6;font-size:0.65rem">Her yeni özellik aynı sınıfa eklenir</span></td>
-        <td class="good">Her Handler küçük kalır<br><span style="opacity:0.6;font-size:0.65rem">Dosya sayısı artar, her dosya sade</span></td>
+        <td><span class="tr">Büyüme Davranışı</span><span class="en">Growth Behavior</span></td>
+        <td class="bad"><span class="tr">BookService sınırsız büyür</span><span class="en">BookService grows indefinitely</span></td>
+        <td class="good"><span class="tr">Her Handler küçük kalır</span><span class="en">Each Handler stays small</span></td>
       </tr>
     </tbody>
   </table>
 
-  <div class="section-title" style="margin-top:2rem">Aynı Endpoint — İki Mimari</div>
+  <div class="section-title" style="margin-top:2rem">
+    <span class="tr">Aynı Endpoint — İki Mimari</span>
+    <span class="en">Same Endpoint — Two Architectures</span>
+  </div>
   <div class="split" style="font-size:0.68rem">
     <div style="border:1px solid rgba(239,68,68,0.2);border-radius:8px;overflow:hidden">
       <div style="padding:0.7rem 1rem;background:rgba(239,68,68,0.08);color:#ef4444;font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;font-weight:700">CRUD — POST /api/loans</div>
       <div style="padding:1rem;font-size:0.65rem;line-height:2;color:var(--muted)">
         Controller<br>
         &nbsp;&nbsp;→ LoanService.LoanBookAsync()<br>
-        &nbsp;&nbsp;&nbsp;&nbsp;→ Kitap kontrol (if kopya == 0)<br>
-        &nbsp;&nbsp;&nbsp;&nbsp;→ Üye kontrol<br>
-        &nbsp;&nbsp;&nbsp;&nbsp;→ book.AvailableCopies-- <span style="color:#ef4444">← dışarıdan değiştiriliyor</span><br>
-        &nbsp;&nbsp;&nbsp;&nbsp;→ context.Loans.Add()<br>
-        &nbsp;&nbsp;&nbsp;&nbsp;→ context.SaveChangesAsync()<br>
-        <br>
-        <span style="color:#ef4444">Aynı LoanService içinde:</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;→ <span class="tr">Kitap kontrol</span><span class="en">Book check</span> (if kopya == 0)<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;→ book.AvailableCopies-- <span style="color:#ef4444">← <span class="tr">dışarıdan</span><span class="en">from outside</span></span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;→ context.SaveChangesAsync()<br><br>
+        <span style="color:#ef4444"><span class="tr">Aynı sınıfta ayrıca:</span><span class="en">Also in the same class:</span></span><br>
         &nbsp;&nbsp;GetActiveLoansAsync()<br>
         &nbsp;&nbsp;GetOverdueLoansAsync()<br>
-        &nbsp;&nbsp;ReturnBookAsync()<br>
-        <span style="color:#ef4444">→ Zaman içinde şişer</span>
+        <span style="color:#ef4444">→ <span class="tr">Zaman içinde şişer</span><span class="en">Bloats over time</span></span>
       </div>
     </div>
     <div style="border:1px solid rgba(34,197,94,0.2);border-radius:8px;overflow:hidden">
       <div style="padding:0.7rem 1rem;background:rgba(34,197,94,0.08);color:var(--infra);font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;font-weight:700">CQRS — POST /api/loans</div>
       <div style="padding:1rem;font-size:0.65rem;line-height:2;color:var(--muted)">
-        Controller<br>
-        &nbsp;&nbsp;→ Dispatcher.SendCommandAsync(cmd)<br>
-        &nbsp;&nbsp;&nbsp;&nbsp;→ LoanBookCommandHandler<br>
-        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ bookRepo.GetByIdAsync() <span style="color:var(--infra)">← arayüz</span><br>
-        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ book.DecreaseCopy() <span style="color:var(--domain)">← entity kuralı</span><br>
-        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ Loan.Create() <span style="color:var(--domain)">← entity doğrulama</span><br>
-        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ loanRepo.AddAsync()<br>
-        <br>
-        <span style="color:var(--infra)">Okuma ayrı Handler'larda:</span><br>
-        &nbsp;&nbsp;GetActiveLoansQueryHandler → ayrı<br>
-        &nbsp;&nbsp;GetOverdueLoansQueryHandler → ayrı<br>
-        <span style="color:var(--infra)">→ Her biri izole, küçük, test edilebilir</span>
+        Controller → Dispatcher<br>
+        &nbsp;&nbsp;→ LoanBookCommandHandler<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;→ bookRepo.GetByIdAsync() <span style="color:var(--infra)">← <span class="tr">arayüz</span><span class="en">interface</span></span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;→ book.DecreaseCopy() <span style="color:var(--domain)">← <span class="tr">entity kuralı</span><span class="en">entity rule</span></span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;→ Loan.Create() <span style="color:var(--domain)">← <span class="tr">doğrulama</span><span class="en">validation</span></span><br><br>
+        <span style="color:var(--infra)"><span class="tr">Okuma ayrı Handler'larda — izole</span><span class="en">Reads in separate Handlers — isolated</span></span>
       </div>
     </div>
   </div>
@@ -1305,23 +736,25 @@ public async Task&lt;List&lt;Loan&gt;&gt; GetOverdueLoansAsync(CancellationToken
 <div style="height:3rem"></div>
 
 <script>
+function setLang(lang) {
+  document.body.className = 'lang-' + lang;
+  document.getElementById('btn-tr').classList.toggle('active', lang === 'tr');
+  document.getElementById('btn-en').classList.toggle('active', lang === 'en');
+}
+
 function showPanel(name) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + name).classList.add('active');
-
-  document.querySelectorAll('.tab').forEach(t => {
-    t.className = 'tab';
-  });
   const tabs = document.querySelectorAll('.tab');
-  const map = { cmd: 0, qry: 1, arch: 2, comp: 3 };
-  const classes = { cmd: 'active-cmd', qry: 'active-qry', arch: 'active-arch', comp: 'active-comp' };
-  tabs[map[name]].classList.add(classes[name]);
+  tabs.forEach(t => t.className = 'tab');
+  const map = {cmd:0, qry:1, arch:2, comp:3};
+  const cls  = {cmd:'active-cmd', qry:'active-qry', arch:'active-arch', comp:'active-comp'};
+  tabs[map[name]].classList.add(cls[name]);
 }
 
 function toggleStep(el) {
   el.classList.toggle('expanded');
 }
 </script>
-
 </body>
 </html>
